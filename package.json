@@ -1,0 +1,25 @@
+{
+  "name": "analystai-root",
+  "version": "1.0.0",
+  "description": "AnalystAI - Agentic Business Intelligence / AI Business Data Analyst FYP",
+  "private": true,
+  "scripts": {
+    "dev:frontend": "cd frontend && npm run dev",
+    "build:frontend": "cd frontend && npm run build",
+    "test:frontend": "cd frontend && npm run test",
+    "dev:backend": "cd backend && uvicorn app.main:app --reload --port 8000",
+    "test:backend": "cd backend && pytest",
+    "seed:backend": "cd backend && python -m app.db.seed"
+  },
+  "keywords": [
+    "analystai",
+    "business-intelligence",
+    "ai-agent",
+    "text-to-sql",
+    "rag",
+    "fastapi",
+    "react"
+  ],
+  "author": "AnalystAI FYP Team",
+  "license": "MIT"
+}
