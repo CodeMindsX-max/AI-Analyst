@@ -22,11 +22,11 @@ class TextToSqlService:
 
         if "september" in lower_q or "decrease" in lower_q or "drop" in lower_q or "august" in lower_q:
             candidate_sql = (
-                "SELECT strftime('%Y-%m', order_date) as month, region_name, category, "
-                "ROUND(SUM(net_amount), 2) as revenue, COUNT(order_id) as orders "
+                "SELECT to_char(order_date, 'YYYY-MM') as month, region_name, category, "
+                "ROUND(CAST(SUM(net_amount) AS numeric), 2) as revenue, COUNT(order_id) as orders "
                 "FROM sales_orders "
                 "WHERE order_date >= '2026-08-01' AND order_date <= '2026-09-30' "
-                "GROUP BY month, region_name, category "
+                "GROUP BY to_char(order_date, 'YYYY-MM'), region_name, category "
                 "ORDER BY month ASC, revenue DESC;"
             )
             explanation = (
@@ -35,8 +35,8 @@ class TextToSqlService:
             )
         elif "region" in lower_q or "regional" in lower_q:
             candidate_sql = (
-                "SELECT region_name, ROUND(SUM(net_amount), 2) as actual_revenue, "
-                "ROUND(AVG(discount_rate) * 100, 1) as avg_discount_pct, COUNT(order_id) as total_orders "
+                "SELECT region_name, ROUND(CAST(SUM(net_amount) AS numeric), 2) as actual_revenue, "
+                "ROUND(CAST(AVG(discount_rate) * 100 AS numeric), 1) as avg_discount_pct, COUNT(order_id) as total_orders "
                 "FROM sales_orders "
                 "GROUP BY region_name "
                 "ORDER BY actual_revenue DESC;"
@@ -44,8 +44,8 @@ class TextToSqlService:
             explanation = "Aggregated total net sales and order counts grouped by operating region."
         elif "product" in lower_q or "growing" in lower_q or "fastest" in lower_q:
             candidate_sql = (
-                "SELECT category, product_name, ROUND(SUM(net_amount), 2) as revenue, "
-                "SUM(quantity) as units_sold, ROUND(SUM(profit_amount), 2) as total_profit "
+                "SELECT category, product_name, ROUND(CAST(SUM(net_amount) AS numeric), 2) as revenue, "
+                "SUM(quantity) as units_sold, ROUND(CAST(SUM(profit_amount) AS numeric), 2) as total_profit "
                 "FROM sales_orders "
                 "GROUP BY category, product_name "
                 "ORDER BY revenue DESC;"
@@ -54,7 +54,7 @@ class TextToSqlService:
         elif "segment" in lower_q or "customer" in lower_q or "churn" in lower_q:
             candidate_sql = (
                 "SELECT c.segment, c.churn_risk, COUNT(DISTINCT c.customer_id) as customer_count, "
-                "ROUND(SUM(s.net_amount), 2) as total_spend "
+                "ROUND(CAST(SUM(s.net_amount) AS numeric), 2) as total_spend "
                 "FROM customers c "
                 "JOIN sales_orders s ON c.customer_id = s.customer_id "
                 "GROUP BY c.segment, c.churn_risk "
@@ -63,10 +63,10 @@ class TextToSqlService:
             explanation = "Joined customers dimension with sales orders to compute spend distribution across risk tiers."
         else:
             candidate_sql = (
-                "SELECT strftime('%Y-%m', order_date) as month, "
-                "ROUND(SUM(net_amount), 2) as monthly_revenue, COUNT(order_id) as order_count "
+                "SELECT to_char(order_date, 'YYYY-MM') as month, "
+                "ROUND(CAST(SUM(net_amount) AS numeric), 2) as monthly_revenue, COUNT(order_id) as order_count "
                 "FROM sales_orders "
-                "GROUP BY month "
+                "GROUP BY to_char(order_date, 'YYYY-MM') "
                 "ORDER BY month ASC;"
             )
             explanation = "Computed monthly sales totals and transaction counts across all historical orders."

@@ -52,9 +52,14 @@ class SqlValidationService:
             if prohibited in tokens:
                 reasons.append(f"Prohibited SQL keyword detected: '{prohibited}'. Only safe read-only queries are allowed.")
 
-        # Extract referenced tables using regex
+        # Extract referenced tables using regex — handle schema-qualified names (schema.table)
         referenced_tables = []
-        table_matches = re.findall(r"\bFROM\s+([A-Za-z0-9_]+)|\bJOIN\s+([A-Za-z0-9_]+)", normalized, re.IGNORECASE)
+        table_matches = re.findall(
+            r"\bFROM\s+(?:[A-Za-z0-9_]+\.)?([A-Za-z0-9_]+)"
+            r"|\bJOIN\s+(?:[A-Za-z0-9_]+\.)?([A-Za-z0-9_]+)",
+            normalized,
+            re.IGNORECASE,
+        )
         for m in table_matches:
             tbl = (m[0] or m[1]).lower()
             if tbl and tbl not in referenced_tables:

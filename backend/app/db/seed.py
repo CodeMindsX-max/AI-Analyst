@@ -279,10 +279,10 @@ def seed_all():
                     summary="Root-cause investigation identifying a 26.8% volume dip in EMEA Enterprise SaaS bookings due to extended procurement delays.",
                     run_id="run-init-seed",
                     query_sql=(
-                        "SELECT strftime('%Y-%m', order_date) as month, region_name, category, "
-                        "ROUND(SUM(net_amount), 2) as revenue FROM sales_orders "
+                        "SELECT to_char(order_date, 'YYYY-MM') as month, region_name, category, "
+                        "ROUND(CAST(SUM(net_amount) AS numeric), 2) as revenue FROM sales_orders "
                         "WHERE order_date >= '2026-08-01' AND order_date <= '2026-09-30' "
-                        "GROUP BY month, region_name, category ORDER BY month ASC, revenue DESC;"
+                        "GROUP BY to_char(order_date, 'YYYY-MM'), region_name, category ORDER BY month ASC, revenue DESC;"
                     ),
                     tags_json='["variance", "revenue", "emea", "q3"]',
                     owner="demo@analystai.local",

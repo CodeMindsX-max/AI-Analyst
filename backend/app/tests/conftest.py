@@ -3,11 +3,9 @@ import re
 from typing import Any, Optional, Dict
 import pytest
 
-# Enforce offline SQLite test environment before importing app or database modules
+# Test environment configuration
 os.environ["APP_ENV"] = "development"
 os.environ["DEMO_MODE"] = "true"
-os.environ["DATABASE_URL"] = "sqlite:///./data/test_analystai.db"
-os.environ["ANALYTICS_DATABASE_URL"] = "sqlite:///./data/analystai_analytics.db"
 
 from app.db.init_db import init_application_db, init_analytics_db
 from app.db.seed import seed_all

@@ -5,8 +5,9 @@ from app.db.base import AnalyticsBase
 
 
 class SalesOrder(AnalyticsBase):
-    """Business table: sales_orders (Analytics Demo Dataset)."""
+    """Business table: sales_orders in the 'analytics' PostgreSQL schema."""
     __tablename__ = "sales_orders"
+    __table_args__ = {"schema": "analytics"}
 
     order_id: Mapped[str] = mapped_column(String(50), primary_key=True)
     order_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
@@ -28,8 +29,9 @@ class SalesOrder(AnalyticsBase):
 
 
 class Customer(AnalyticsBase):
-    """Business table: customers (Analytics Demo Dataset)."""
+    """Business table: customers in the 'analytics' PostgreSQL schema."""
     __tablename__ = "customers"
+    __table_args__ = {"schema": "analytics"}
 
     customer_id: Mapped[str] = mapped_column(String(50), primary_key=True)
     customer_name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -43,8 +45,9 @@ class Customer(AnalyticsBase):
 
 
 class Product(AnalyticsBase):
-    """Business table: products (Analytics Demo Dataset)."""
+    """Business table: products in the 'analytics' PostgreSQL schema."""
     __tablename__ = "products"
+    __table_args__ = {"schema": "analytics"}
 
     product_id: Mapped[str] = mapped_column(String(50), primary_key=True)
     product_name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -56,8 +59,9 @@ class Product(AnalyticsBase):
 
 
 class Region(AnalyticsBase):
-    """Business table: regions (Analytics Demo Dataset)."""
+    """Business table: regions in the 'analytics' PostgreSQL schema."""
     __tablename__ = "regions"
+    __table_args__ = {"schema": "analytics"}
 
     region_id: Mapped[str] = mapped_column(String(50), primary_key=True)
     region_name: Mapped[str] = mapped_column(String(100), nullable=False)

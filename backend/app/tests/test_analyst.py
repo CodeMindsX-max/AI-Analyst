@@ -6,7 +6,7 @@ def test_analyst_run_variance_pipeline(client):
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "completed"
+    assert data["status"] == "completed", f"Status was: {data.get('status')} err={data.get('error_message')} res={data.get('result')}"
     assert "result" in data
     assert data["result"] is not None
 

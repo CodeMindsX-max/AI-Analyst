@@ -42,7 +42,7 @@ def test_sql_execute_runs_read_only(client):
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "success"
+    assert data["status"] == "success", f"Error was: {data.get('error_message')}"
     assert len(data["rows"]) > 0
     assert "region_name" in data["columns"]
 
@@ -55,7 +55,7 @@ def test_sql_execute_zero_rows_honest_reporting(client):
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "success"
+    assert data["status"] == "success", f"Error was: {data.get('error_message')}"
     assert data["row_count"] == 0
     assert data["rows"] == []
 

@@ -1,6 +1,17 @@
+"""
+SQL Execution Service for AnalystAI.
+
+Executes validated, read-only SQL queries against the analytics schema
+in Supabase PostgreSQL. The PostgresAnalyticsConnector enforces:
+  - AST pre-validation (via sql_validation_service)
+  - statement_timeout for query duration control
+  - Hard row count limits
+  - SELECT-only execution (no DDL, DML, or multi-statement)
+"""
 from typing import Optional
 from sqlalchemy.orm import Session
-from app.providers.sqlite_demo_connector import SqliteDemoConnector
+
+from app.providers.postgres_analytics_connector import PostgresAnalyticsConnector
 from app.services.sql_validation_service import sql_validation_service
 from app.schemas.sql import SqlExecuteResponse
 from app.core.exceptions import UnsafeQueryException
@@ -8,10 +19,10 @@ from app.models.data_source import DataSource
 
 
 class SqlExecutionService:
-    """Service safely executing read-only SQL queries against the analytics database."""
+    """Service safely executing read-only SQL queries against the analytics PostgreSQL schema."""
 
-    def __init__(self, connector: Optional[SqliteDemoConnector] = None):
-        self.connector = connector or SqliteDemoConnector()
+    def __init__(self, connector: Optional[PostgresAnalyticsConnector] = None):
+        self.connector = connector or PostgresAnalyticsConnector()
 
     def execute(
         self,
@@ -20,8 +31,8 @@ class SqlExecutionService:
         source_id: Optional[str] = None,
         db: Optional[Session] = None,
     ) -> SqlExecuteResponse:
-        # Check source_id if provided
-        if source_id and source_id not in ("demo-source-1", "default"):
+        # Validate the data source if explicitly specified
+        if source_id and source_id not in ("demo-source-1", "default", None):
             if db is not None:
                 ds = db.query(DataSource).filter(DataSource.id == source_id).first()
                 if not ds:
@@ -33,14 +44,18 @@ class SqlExecutionService:
                         status="error",
                         error_message=f"Data source '{source_id}' was not found in the workspace.",
                     )
-                if ds.kind not in ("demo_dataset", "sqlite") or ds.status == "scaffold":
+                # Only allow demo dataset and postgresql sources; block scaffolded external connectors
+                if ds.kind not in ("demo_dataset", "postgresql") or ds.status == "scaffold":
                     return SqlExecuteResponse(
                         columns=[],
                         rows=[],
                         row_count=0,
                         duration_ms=0,
                         status="error",
-                        error_message=f"Data source '{ds.name}' ({ds.kind}) is a scaffolded connector. Direct query execution is currently available only for the seeded SQLite analytics warehouse.",
+                        error_message=(
+                            f"Data source '{ds.name}' ({ds.kind}) is a scaffolded connector. "
+                            "Only the demo analytical dataset supports direct query execution."
+                        ),
                     )
             else:
                 return SqlExecuteResponse(
@@ -52,7 +67,7 @@ class SqlExecutionService:
                     error_message=f"Remote data source '{source_id}' execution requires database session context.",
                 )
 
-        # Pre-execution validation
+        # Pre-execution AST-level validation
         validation = sql_validation_service.validate_query(query_sql)
         if not validation.is_valid:
             reasons_str = "; ".join(validation.reasons)
@@ -91,7 +106,7 @@ class SqlExecutionService:
                 row_count=0,
                 duration_ms=0,
                 status="error",
-                error_message=f"Execution error: {str(e)}",
+                error_message=f"Execution error: {str(e)[:200]}",
             )
 
 
