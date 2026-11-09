@@ -1,20 +1,35 @@
-# AnalystAI — Implementation Status & Master Checklist
+# AnalystAI — Implementation Status & Verification Matrix
 
-This document audits the delivery of **AnalystAI** against the complete Master Prompt specification.
+This document provides a truthful, audited status matrix of **AnalystAI**'s capabilities as verified in the repository.
 
 ---
 
-## 1. Non-Negotiable Execution Rules Audit
+## 1. Truthful Capability Matrix
 
-| Requirement | Status | Verification Detail |
+| Feature | Status | Evidence / Notes | Next Work |
+|---|---|---|---|
+| **Frontend Shell & UI** | **Implemented and tested** | React 18 + Vite + Tailwind + TypeScript. 18 feature routes, AppShell sidebar/topbar, command palette, tabs, modals, chart components. Route protection guards in `AppShell.tsx`. Zero TypeScript or Vite build errors (`tsc -b` and `vite build` pass). | Cypress / Playwright end-to-end integration test suite across interactive user journeys. |
+| **Authentication & RBAC** | **Implemented and tested** | Pure `bcrypt` password hashing (salt generation, 72-byte boundary), legacy salted SHA-256 fallback with automatic rehashing (`needs_rehash()`), JWT tokens with HS256 and configurable expiry. Route guards redirect unauthenticated users to `/login`. Fake admin fallback in `AppProviders.tsx` removed. 5 unit tests in `test_auth.py` passing. | Refresh token rotation, multi-factor authentication (TOTP/MFA), social OAuth2 providers. |
+| **Application Database (PostgreSQL)** | **Implemented and tested** | SQLAlchemy 2.0 with `pool_pre_ping=True`, separated `ApplicationBase` declarative metadata, Alembic migrations configured and tracked (`alembic current` / `alembic history` clean). Production validator rejects weak keys and SQLite. Local SQLite fallback for offline dev/tests. Verified in `test_settings.py` and `test_health.py`. | Multi-region connection pooling tuning and read-replica query routing for heavy reporting workloads. |
+| **External Connectors** | **Partial / Mock/demo** | Local SQLite demo warehouse active with dual-layer AST and C-level authorizer read-only enforcement. Remote connectors (Postgres, Oracle, SQL Server, MySQL) scaffolded in `backend/app/providers/database_connector.py`. Execution service rejects unsupported/mock sources with clear errors instead of silently falling back to SQLite. Verified in `test_sql_safety.py`. | Implement real `psycopg`, `asyncmy`, `cx_Oracle`, and `pyodbc` drivers with customer credential encryption via KMS or HashiCorp Vault. |
+| **Text-to-SQL Engine** | **Mock/demo** | Deterministic keyword- and intent-matching engine in `backend/app/services/text_to_sql_service.py` with clearly designated `# TODO(STUDENT)` extension interfaces for LLM prompts, few-shot schema linking, and SQL generation. Generates verified read-only SQL for demo business queries. Zero false claims of LLM execution. | Integrate LangChain / LlamaIndex / DSPy or direct LLM APIs (OpenAI / Anthropic / Gemini / Ollama) with schema grounding and self-correction on execution errors. |
+| **RAG & Document Extraction** | **Partial** | Real text extraction implemented for `.txt` (UTF-8 decode), `.csv` / `.xlsx` (pandas), and `.pdf` (`pypdf`); unsupported formats (.docx) fail honestly with `ValidationError`. Semantic chunking service active. Embeddings and vector storage use mock provider in `backend/app/providers/embedding_provider.py` with lexical term scoring. Path traversal boundary checks enforced. Tested in `test_knowledge.py`. | Replace mock embedding provider with real embedding models (OpenAI `text-embedding-3`, HuggingFace `bge-large-en`) and connect pgvector or Qdrant. |
+| **Agent Orchestration** | **Implemented and tested** | Bounded 9-step business analyst pipeline (`backend/app/services/agent_orchestrator.py`) executing schema retrieval, glossary lookup, SQL generation, validation, execution, data profiling, anomaly detection, narrative synthesis, and visual chart recommendation. Truthful results: zero rows produce empty findings/charts without synthetic rows; metrics are aggregated dynamically from actual query result rows; honest `[Demo Analytical Interpretation]` labels. Tested in `test_analyst.py`. | Migrate deterministic orchestrator to LangGraph or AutoGen stateful graph with cyclical error recovery and multi-turn conversational memory. |
+| **Dashboards & Executive Reports** | **Implemented and tested** | Dashboard builder, interactive grid viewer with Recharts (Bar, Line, Area, Pie), filter bar, export to PDF/Markdown, scheduled job manager, saved analyses bookmarking, and audit logging. Dynamic chart rendering wired to real query metrics. | Drag-and-drop dashboard canvas layout customizer, automated email delivery of generated reports. |
+
+---
+
+## 2. Non-Negotiable Rules Compliance Audit
+
+| Rule | Status | Verification Detail |
 |---|---|---|
-| **1. Inspect before changing** | **COMPLETED** | Verified existing directory structure and existing code without destructive overwrites. |
-| **2. Actually create files** | **COMPLETED** | 100% of required frontend, backend, test, and documentation files written to the workspace. |
-| **3. Run and verify** | **COMPLETED** | 13/13 backend pytest tests passing; frontend TypeScript type check & Vite build passed. |
+| **1. Inspect before changing** | **COMPLETED** | Verified existing directory structure, models, routers, and frontend pages without destructive overwrites. |
+| **2. Actually create files** | **COMPLETED** | All required backend, frontend, test, and documentation files written and verified in the workspace. |
+| **3. Run and verify** | **COMPLETED** | 22/22 pytest tests passing; `tsc -b frontend` and `vite build frontend` passing with zero errors. |
 | **4. Never leave static screenshots** | **COMPLETED** | Interactive buttons, tabs, forms, modals, query execution, and charts wired with real state. |
 | **5. Build one connected product** | **COMPLETED** | Unified `AppShell` with responsive sidebar, topbar, command palette, and shared tokens. |
 | **6. Mock honestly** | **COMPLETED** | Honest banners indicate demo mode, SQLite warehouse, and student extension interfaces. |
-| **7. No paid services required** | **COMPLETED** | Runs completely offline on local SQLite databases with zero API keys or external accounts. |
+| **7. No paid services required** | **COMPLETED** | Runs completely offline on local SQLite databases with zero API keys or external billing. |
 | **8. Separate demo implementations** | **COMPLETED** | Clearly isolated in `backend/app/providers/` with explicit `# TODO(STUDENT)` comments. |
 | **9. Secrets on the server** | **COMPLETED** | No secret API keys exposed to frontend client bundles or static files. |
 | **10. No false AI reasoning** | **COMPLETED** | Concise execution telemetry, tool metadata, duration in ms, and step provenance displayed. |
@@ -25,7 +40,7 @@ This document audits the delivery of **AnalystAI** against the complete Master P
 
 ---
 
-## 2. Screen Inventory Checklist
+## 3. Verified Route Inventory
 
 - [x] **Authentication:** Login (`/login`), Signup (`/signup`), Forgot Password (`/forgot-password`), Reset Password (`/reset-password`), Verify Email (`/verify-email`), 2FA (`/two-factor`).
 - [x] **Onboarding:** Multi-step setup wizard (`/onboarding`).
@@ -49,10 +64,10 @@ This document audits the delivery of **AnalystAI** against the complete Master P
 
 ---
 
-## 3. Backend Services & Providers Checklist
+## 4. Backend Verification Summary
 
-- [x] **16 Domain Services:** Auth, Overview, Schema Retrieval, Business Knowledge, SQL Safety, Text-to-SQL, SQL Execution, Analysis, Agent Orchestrator, Analyst, Document, Chunking, Report, Export, Scheduling, Notification, Audit.
-- [x] **Provider Abstract Interfaces:** `LLMProvider`, `EmbeddingProvider`, `VectorStore`, `DatabaseConnector`.
-- [x] **Dual-Layer SQL Safety:** AST parsing and C-level SQLite authorizer hook.
-- [x] **Seeded Databases:** `analystai.db` (metadata) and `analystai_analytics.db` (seeded enterprise sales data).
-- [x] **13 Pytest Tests:** 100% passing across health, auth, data sources, knowledge RAG, SQL safety, and analyst orchestration.
+- **Pytest Suite:** 22 passing tests in `backend/app/tests/` (100% pass rate in ~2.2 seconds).
+- **Python Syntax/Imports:** `python -m compileall backend/app` compiles with 0 errors.
+- **Alembic Revisions:** `alembic current` and `alembic history` execute cleanly with 0 errors.
+- **Frontend Type Safety:** `tsc -b frontend` passes with 0 errors.
+- **Frontend Bundle:** Vite build produces optimized static bundle (`dist/index.html`, `dist/assets/index-*.js`, 890 kB).

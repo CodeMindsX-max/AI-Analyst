@@ -4,8 +4,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from app.core.config import settings
 
-# Resolve SQLite DB absolute paths if relative
-def _resolve_sqlite_url(db_url: str) -> str:
+
+def _resolve_db_url(db_url: str) -> str:
+    """Resolve SQLite relative paths against BASE_DIR and ensure parent directories exist."""
     if db_url.startswith("sqlite:///./"):
         rel_path = db_url.replace("sqlite:///./", "")
         abs_path = settings.BASE_DIR / rel_path
@@ -13,30 +14,62 @@ def _resolve_sqlite_url(db_url: str) -> str:
         return f"sqlite:///{abs_path.as_posix()}"
     return db_url
 
-APP_DB_URL = _resolve_sqlite_url(settings.DATABASE_URL)
-ANALYTICS_DB_URL = _resolve_sqlite_url(settings.ANALYTICS_DATABASE_URL)
 
-# Engine for application metadata (users, runs, dashboards, reports, etc.)
-engine = create_engine(
-    APP_DB_URL,
-    connect_args={"check_same_thread": False} if "sqlite" in APP_DB_URL else {},
-    echo=False,
+APP_DB_URL = _resolve_db_url(settings.DATABASE_URL)
+ANALYTICS_DB_URL = _resolve_db_url(settings.ANALYTICS_DATABASE_URL)
+
+# 1. Primary Engine for Application Metadata Database (PostgreSQL / Supabase / SQLite dev fallback)
+if "postgresql" in APP_DB_URL:
+    engine = create_engine(
+        APP_DB_URL,
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=10,
+        pool_recycle=300,
+        echo=False,
+    )
+else:
+    engine = create_engine(
+        APP_DB_URL,
+        connect_args={"check_same_thread": False} if "sqlite" in APP_DB_URL else {},
+        echo=False,
+    )
+
+SessionLocal = sessionmaker(
+    bind=engine,
+    autoflush=False,
+    autocommit=False,
+    expire_on_commit=False,
 )
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Engine for analytics data (read/write during seed, read-only during query execution)
-analytics_engine = create_engine(
-    ANALYTICS_DB_URL,
-    connect_args={"check_same_thread": False} if "sqlite" in ANALYTICS_DB_URL else {},
-    echo=False,
+# 2. Analytics Engine (Customer / Demo Analytics Database)
+if "postgresql" in ANALYTICS_DB_URL:
+    analytics_engine = create_engine(
+        ANALYTICS_DB_URL,
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=10,
+        pool_recycle=300,
+        echo=False,
+    )
+else:
+    analytics_engine = create_engine(
+        ANALYTICS_DB_URL,
+        connect_args={"check_same_thread": False} if "sqlite" in ANALYTICS_DB_URL else {},
+        echo=False,
+    )
+
+AnalyticsSessionLocal = sessionmaker(
+    bind=analytics_engine,
+    autoflush=False,
+    autocommit=False,
+    expire_on_commit=False,
 )
-
-AnalyticsSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=analytics_engine)
 
 
 def get_db() -> Generator[Session, None, None]:
-    """Dependency for application metadata database session."""
+    """Dependency providing an application metadata database session."""
     db = SessionLocal()
     try:
         yield db
@@ -45,7 +78,7 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def get_analytics_db() -> Generator[Session, None, None]:
-    """Dependency for analytics database session."""
+    """Dependency providing an analytical / demo warehouse database session."""
     db = AnalyticsSessionLocal()
     try:
         yield db

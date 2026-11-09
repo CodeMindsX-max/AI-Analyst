@@ -17,43 +17,61 @@ class DocumentService:
 
     def _extract_text(self, file_path: Path, ext: str) -> str:
         """Extract plain text based on file format."""
+        if ext == ".docx":
+            # Per FYP architecture specification: DOCX requires python-docx or pandoc converter.
+            raise ValidationError("DOCX extraction is currently unsupported in this environment. Please convert to PDF, TXT, or CSV.")
+
         try:
             if ext == ".txt":
                 return file_path.read_text(encoding="utf-8", errors="replace")
             elif ext == ".csv":
-                import pandas as pd
-                df = pd.read_csv(file_path, nrows=50)
-                return f"CSV Data Preview ({df.shape[0]} rows x {df.shape[1]} cols):\n" + df.to_string()
+                try:
+                    import pandas as pd
+                    df = pd.read_csv(file_path, nrows=50)
+                    return f"CSV Data Preview ({df.shape[0]} rows x {df.shape[1]} cols):\n" + df.to_string()
+                except Exception:
+                    return file_path.read_text(encoding="utf-8", errors="replace")[:4000]
             elif ext == ".xlsx":
-                import pandas as pd
-                df = pd.read_excel(file_path, nrows=50)
-                return f"Excel Data Preview ({df.shape[0]} rows x {df.shape[1]} cols):\n" + df.to_string()
+                try:
+                    import pandas as pd
+                    df = pd.read_excel(file_path, nrows=50)
+                    return f"Excel Data Preview ({df.shape[0]} rows x {df.shape[1]} cols):\n" + df.to_string()
+                except Exception as ex:
+                    return f"[Excel extraction error: {str(ex)}]"
             elif ext == ".pdf":
-                # Check for PyPDF / pypdf if installed, else inform student
                 try:
                     import pypdf
                     reader = pypdf.PdfReader(str(file_path))
                     pages_text = [page.extract_text() or "" for page in reader.pages]
-                    return "\n\n".join(pages_text) if "".join(pages_text).strip() else "[PDF contains no extractable text. Scanned images require OCR.]"
+                    full_text = "\n\n".join(pages_text).strip()
+                    return full_text if full_text else "[PDF contains no extractable text. Scanned images or forms require an external OCR model.]"
                 except ImportError:
-                    return f"[Uploaded PDF document: {file_path.name}. Note: pypdf not installed in environment; text preview simulated.]"
-            elif ext == ".docx":
-                return f"[Uploaded DOCX document: {file_path.name}. Text extraction placeholder.]"
+                    return f"[Uploaded PDF document: {file_path.name}. Note: pypdf not installed in environment; extraction skipped.]"
             return ""
+        except ValidationError:
+            raise
         except Exception as e:
             return f"[Extraction error: {str(e)}]"
 
     async def save_and_index_document(self, db: Session, upload_file: UploadFile, owner: str = "Demo Admin") -> KnowledgeDocument:
-        filename = upload_file.filename or "untitled.txt"
-        ext = os.path.splitext(filename)[1].lower()
+        raw_filename = upload_file.filename or "untitled.txt"
+        clean_filename = os.path.basename(raw_filename).strip() or "untitled.txt"
+        ext = os.path.splitext(clean_filename)[1].lower()
 
         if ext not in self.ALLOWED_EXTENSIONS:
-            raise ValidationError(f"File extension '{ext}' is not supported. Allowed formats: {list(self.ALLOWED_EXTENSIONS)}")
+            raise ValidationError(f"File extension '{ext}' is not supported. Allowed formats: {sorted(list(self.ALLOWED_EXTENSIONS))}")
+
+        if ext == ".docx":
+            raise ValidationError("DOCX extraction is currently unsupported in this environment. Please convert to PDF, TXT, or CSV.")
 
         upload_dir = settings.get_upload_path()
         doc_id = f"doc-{uuid.uuid4().hex[:10]}"
-        safe_filename = f"{doc_id}_{Path(filename).name}"
-        destination = upload_dir / safe_filename
+        safe_filename = f"{doc_id}_{Path(clean_filename).name}"
+        destination = (upload_dir / safe_filename).resolve()
+
+        # Enforce boundary check against path traversal
+        if not destination.is_relative_to(upload_dir.resolve()):
+            raise ValidationError("Invalid filename: directory traversal detected.")
 
         # Stream save and enforce size limit
         size_bytes = 0
@@ -72,7 +90,7 @@ class DocumentService:
         char_count = len(extracted_text)
 
         # Chunk text
-        chunks = chunking_service.chunk_text(extracted_text, doc_id, filename)
+        chunks = chunking_service.chunk_text(extracted_text, doc_id, clean_filename)
 
         # Create KnowledgeDocument record
         doc = KnowledgeDocument(

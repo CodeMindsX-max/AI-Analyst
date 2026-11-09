@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.core.config import settings
@@ -11,14 +11,17 @@ from app.db.seed import seed_all
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifespan context manager for database initialization and seeding."""
+    """Lifespan context manager for application initialization."""
     logger.info("Starting AnalystAI Backend...")
-    try:
-        # Seed database idempotently on startup
-        seed_all()
-        logger.info("AnalystAI demo dataset verified.")
-    except Exception as e:
-        logger.error(f"Failed to initialize database on startup: {e}")
+    if settings.APP_ENV == "development" or settings.DEMO_MODE:
+        try:
+            # Seed local demo dataset when running in development/demo mode
+            seed_all()
+            logger.info("AnalystAI development demo dataset verified and ready.")
+        except Exception as e:
+            logger.warning(f"Database development seed encountered an issue: {e}")
+    else:
+        logger.info("Running in production mode. Database migrations must be managed via Alembic.")
     yield
     logger.info("AnalystAI Backend stopped.")
 
@@ -32,7 +35,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS configuration
+# CORS configuration allowing frontend communication
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS if isinstance(settings.CORS_ORIGINS, list) else ["http://localhost:5173"],
@@ -41,7 +44,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Custom exception handler for uniform structured errors
+
+# Custom exception handler for uniform structured errors across the application
 @app.exception_handler(AnalystAIException)
 async def analystai_exception_handler(request: Request, exc: AnalystAIException):
     return JSONResponse(
@@ -54,14 +58,16 @@ async def analystai_exception_handler(request: Request, exc: AnalystAIException)
     )
 
 
-# Mount main API router
+# Mount the v1 API router
 app.include_router(api_router)
 
 
 @app.get("/")
 def root():
+    """Root endpoint verifying API is live and pointing to documentation/health routes."""
     return {
         "message": "Welcome to AnalystAI API. Explore OpenAPI documentation at /docs",
         "health": "/api/v1/health",
+        "health_ready": "/api/v1/health/ready",
         "demo_mode": settings.DEMO_MODE,
     }

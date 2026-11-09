@@ -161,8 +161,18 @@ class AgentOrchestrator:
 
         # Step 7: Execute query
         s7_start = time.perf_counter()
-        exec_res = sql_execution_service.execute(candidate_sql, limit=100)
+        exec_res = sql_execution_service.execute(
+            candidate_sql,
+            limit=100,
+            source_id=request.source_id,
+            db=db,
+        )
         s7_dur = exec_res.duration_ms
+        step7_desc = (
+            f"Executed read-only query; fetched {exec_res.row_count} rows in {exec_res.duration_ms}ms."
+            if exec_res.status == "success"
+            else f"Query execution failed: {exec_res.error_message}"
+        )
         events.append(
             AgentRunEvent(
                 id=f"evt-{uuid.uuid4().hex[:8]}",
@@ -170,16 +180,28 @@ class AgentOrchestrator:
                 step_index=7,
                 step_name="Execute Query",
                 status=exec_res.status,
-                description=f"Executed read-only query; fetched {exec_res.row_count} rows in {exec_res.duration_ms}ms.",
+                description=step7_desc,
                 tool_name="DatabaseExecutionTool",
-                details_json=f'{{"row_count": {exec_res.row_count}, "latency_ms": {exec_res.duration_ms}}}',
+                details_json=f'{{"row_count": {exec_res.row_count}, "latency_ms": {exec_res.duration_ms}, "status": "{exec_res.status}"}}',
                 duration_ms=s7_dur,
             )
         )
 
         # Step 8: Analyze returned rows
         s8_start = time.perf_counter()
-        analysis = analysis_service.analyze_results(request.question, exec_res.rows, exec_res.columns)
+        if exec_res.status == "error":
+            analysis = {
+                "executive_answer": f"Analysis halted due to SQL execution failure: {exec_res.error_message}",
+                "findings": [],
+                "charts": [],
+            }
+            s8_status = "failed"
+            s8_desc = "Analysis skipped due to query execution error."
+        else:
+            analysis = analysis_service.analyze_results(request.question, exec_res.rows, exec_res.columns)
+            s8_status = "completed"
+            s8_desc = f"Synthesized findings and chart datasets across {exec_res.row_count} queried records."
+
         s8_dur = int((time.perf_counter() - s8_start) * 1000)
         events.append(
             AgentRunEvent(
@@ -187,8 +209,8 @@ class AgentOrchestrator:
                 run_id=run_id,
                 step_index=8,
                 step_name="Analyze Data Rows",
-                status="completed",
-                description="Computed monthly variances, regional contribution deltas, and category shares.",
+                status=s8_status,
+                description=s8_desc,
                 tool_name="DeterministicAnalysisEngine",
                 details_json=f'{{"findings_count": {len(analysis["findings"])}}}',
                 duration_ms=s8_dur,
@@ -204,69 +226,76 @@ class AgentOrchestrator:
                 run_id=run_id,
                 step_index=9,
                 step_name="Synthesize Explanation",
-                status="completed",
-                description="Synthesized executive answer, formatted finding cards, and assembled interactive charts.",
+                status="completed" if exec_res.status == "success" else "failed",
+                description="Synthesized executive answer, formatted finding cards, and assembled interactive charts."
+                if exec_res.status == "success"
+                else "Synthesis halted due to upstream execution error.",
                 tool_name="BusinessExplanationSynthesizer",
-                details_json='{"charts_count": 2, "evidence_count": 3}',
+                details_json=f'{{"charts_count": {len(analysis["charts"])}, "findings_count": {len(analysis["findings"])}}}',
                 duration_ms=s9_dur,
             )
         )
 
-        # Build Evidence Items
-        evidence: List[EvidenceItem] = [
-            EvidenceItem(
-                type="schema",
-                title="Database Table: sales_orders",
-                source_name="Demo Analytics Database",
-                source_id="demo-source-1",
-                excerpt="sales_orders schema: order_id, order_date, customer_id, product_id, net_amount, discount_rate, region_name, category",
-                table_name="sales_orders",
-                is_demo=True,
-            ),
-            EvidenceItem(
-                type="glossary",
-                title="KPI Formula: Net Revenue",
-                source_name="Business Glossary",
-                source_id="glossary-term-revenue",
-                excerpt="Net Revenue = SUM(quantity * unit_price * (1 - discount_rate)). Excludes canceled orders.",
-                table_name="sales_orders",
-                column_name="net_amount",
-                is_demo=True,
-            ),
-            EvidenceItem(
-                type="calculation",
-                title="Variance Calculation: September vs August",
-                source_name="Analysis Engine",
-                excerpt="September ($284,500) - August ($331,600) = -$47,100 (-14.2%). EMEA accounted for -$36,400 (77.3% of total variance).",
-                is_demo=True,
-            ),
-        ]
+        # Build Grounded Evidence Items
+        evidence: List[EvidenceItem] = []
+        for tbl in schema_context.get("tables_selected", []):
+            evidence.append(
+                EvidenceItem(
+                    type="schema",
+                    title=f"Database Table: {tbl}",
+                    source_name="Demo Analytics Database",
+                    source_id=request.source_id or "demo-source-1",
+                    excerpt=f"Table '{tbl}' schema referenced for analytic joins and aggregations.",
+                    table_name=tbl,
+                    is_demo=True,
+                )
+            )
+
+        for g in glossary_items[:2]:
+            evidence.append(
+                EvidenceItem(
+                    type="glossary",
+                    title=f"KPI Definition: {g.get('term', 'Metric')}",
+                    source_name="Business Glossary",
+                    source_id=f"glossary-{g.get('term', 'metric').lower()}",
+                    excerpt=f"{g.get('definition', '')} Formula: {g.get('formula') or 'N/A'}",
+                    table_name=g.get("tables"),
+                    column_name=g.get("columns"),
+                    is_demo=True,
+                )
+            )
+
+        if exec_res.status == "success" and exec_res.row_count > 0:
+            evidence.append(
+                EvidenceItem(
+                    type="calculation",
+                    title="SQL Execution Provenance",
+                    source_name="Analysis Engine",
+                    excerpt=f"Query successfully evaluated {exec_res.row_count} rows across {len(exec_res.columns)} columns in {exec_res.duration_ms}ms.",
+                    is_demo=True,
+                )
+            )
 
         total_duration = int((time.perf_counter() - pipeline_start) * 1000)
 
-        # Assemble Full AnalystResult
+        # Assemble Full AnalystResult (honestly, with no synthetic fallback rows)
         result = AnalystResult(
             question=request.question,
             task_summary=task_summary,
             executive_answer=analysis["executive_answer"],
             findings=analysis["findings"],
             charts=analysis["charts"],
-            table_columns=exec_res.columns or ["month", "region_name", "category", "revenue", "orders"],
-            table_rows=exec_res.rows or [
-                {"month": "2026-08", "region_name": "North America", "category": "Enterprise SaaS", "revenue": 142000, "orders": 85},
-                {"month": "2026-08", "region_name": "EMEA", "category": "Enterprise SaaS", "revenue": 135900, "orders": 74},
-                {"month": "2026-09", "region_name": "North America", "category": "Enterprise SaaS", "revenue": 144500, "orders": 86},
-                {"month": "2026-09", "region_name": "EMEA", "category": "Enterprise SaaS", "revenue": 99500, "orders": 55},
-            ],
+            table_columns=exec_res.columns or [],
+            table_rows=exec_res.rows or [],
             candidate_sql=candidate_sql,
-            query_safety_status="PASSED (Read-only single statement)",
+            query_safety_status="PASSED (Read-only single statement)" if validation.is_valid else "FAILED",
             evidence=evidence,
             data_coverage=DataCoverage(
-                selected_source="Demo Sales Dataset (SQLite)",
-                tables_used=["sales_orders", "regions"],
-                columns_used=["order_date", "net_amount", "region_name", "category"],
-                row_count=exec_res.row_count or 1420,
-                date_range_applied="2026-08-01 to 2026-09-30",
+                selected_source="Demo Sales Dataset (SQLite)" if (not request.source_id or request.source_id == "demo-source-1") else f"Source: {request.source_id}",
+                tables_used=list(schema_context["tables_selected"]),
+                columns_used=exec_res.columns or [],
+                row_count=exec_res.row_count,
+                date_range_applied=request.date_range or "all_time",
                 last_updated="2026-10-11T12:00:00Z",
                 execution_duration_ms=total_duration,
             ),
@@ -276,7 +305,7 @@ class AgentOrchestrator:
 
         # Update AgentRun in DB
         agent_run.task_summary = task_summary
-        agent_run.status = "completed"
+        agent_run.status = "completed" if exec_res.status == "success" else "failed"
         agent_run.duration_ms = total_duration
         agent_run.query_sql = candidate_sql
         agent_run.result_json = result.model_dump_json()

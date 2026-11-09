@@ -38,6 +38,7 @@ import type { AgentRunResponse, PromptSuggestion, AnalystResult } from '@/api/ty
 import { useToast } from '@/app/providers';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
+import { ChartCard } from '@/components/ui/ChartCard';
 import { Badge } from '@/components/ui/Badge';
 import { Tabs } from '@/components/ui/Tabs';
 import { Dialog } from '@/components/ui/Dialog';

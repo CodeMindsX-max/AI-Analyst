@@ -3,12 +3,12 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from app.models.user import User
 from app.schemas.auth import LoginRequest, TokenResponse, UserResponse
-from app.core.security import verify_password, create_access_token
+from app.core.security import verify_password, create_access_token, needs_rehash, get_password_hash
 from app.core.exceptions import UnauthorizedException
 
 
 class AuthService:
-    """Service handling authentication and session management."""
+    """Service handling user authentication, session token issuance, and seamless hash upgrades."""
 
     def authenticate_user(self, db: Session, login_data: LoginRequest) -> TokenResponse:
         user = db.query(User).filter(User.email == login_data.email).first()
@@ -17,6 +17,15 @@ class AuthService:
 
         if not user.is_active:
             raise UnauthorizedException("User account is inactive.")
+
+        # Seamlessly upgrade legacy password hashes (e.g. SHA-256) to bcrypt upon successful verification
+        if needs_rehash(user.hashed_password):
+            try:
+                user.hashed_password = get_password_hash(login_data.password)
+                db.add(user)
+                db.commit()
+            except Exception:
+                db.rollback()
 
         token = create_access_token(
             data={"sub": user.id, "email": user.email, "role": user.role},

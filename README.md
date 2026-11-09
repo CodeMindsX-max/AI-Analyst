@@ -7,17 +7,21 @@
 ## 🌟 Key Highlights
 
 - **Zero-Cost, Zero-API-Key Default Runtime:** Runs 100% locally out-of-the-box using deterministic local mock AI providers and a pre-seeded SQLite analytical data warehouse (`analystai_analytics.db`).
-- **9-Step Bounded Agent Workflow:** Executes a structured analysis pipeline:
-  1. Question Understanding & Parsing
-  2. Schema Retrieval & Entity Extraction
+- **Two-Engine Database Architecture:**
+  - **Application Database (`ApplicationBase`):** Stores users, workspaces, query history, audit events, saved analyses, and knowledge metadata (PostgreSQL/Supabase in production, SQLite in local development). Managed via **Alembic** migrations.
+  - **Analytical Warehouse (`AnalyticsBase`):** Holds customer/analytical fact and dimension tables (`sales_orders`, `customers`, `products`, `regions`). Independent read-only SQLite connector with C-level security authorizers.
+- **Hardened Authentication:** Adaptive **bcrypt** password hashing with automatic backward-compatibility and on-the-fly upgrade for legacy SHA-256 hashes. Full JWT token validation. Real React route guards redirect unauthenticated sessions to `/login`.
+- **9-Step Bounded Agent Workflow:** Executes a structured, transparent analysis pipeline:
+  1. Question Understanding & Intent Decomposition
+  2. Schema Retrieval & Join Detection
   3. Business Knowledge & Glossary Retrieval (RAG)
   4. Analytical Planning
-  5. Text-to-SQL Generation
+  5. Text-to-SQL Generation (grounded candidate SQL)
   6. Read-Only SQL Safety & AST Validation
-  7. Sandboxed SQL Execution (SQLite authorizer enforced)
-  8. Metric Variance & Anomaly Detection
+  7. Sandboxed SQL Execution (read-only authorizer enforced)
+  8. Metric Aggregation & Variance Detection
   9. Executive & Visual Answer Synthesis
-- **Strict Read-Only SQL Safety:** Dual-layer defense mechanism combining SQL AST parsing and SQLite C-level authorizer hooks to permanently block mutation queries (`DROP`, `INSERT`, `UPDATE`, `ALTER`, `ATTACH`).
+- **Truthful Analytical Reporting:** Zero fabricated fallback rows. If an external source is unconnected or a query returns zero records, the UI reports an honest empty state or explicit error rather than synthetic numbers.
 - **Complete Enterprise UI:** Built with React 18, TypeScript, Tailwind CSS, and Recharts—featuring Executive Overview, AI Analyst with interactive timeline, SQL Workspace, Data Explorer, Knowledge Base (RAG), Business Glossary, Custom Dashboards, Executive Reports, Schedules, Audit Trail, and Command Palette (`Ctrl+K`).
 - **Explicit Extension Points (`# TODO(STUDENT)`):** Clean architectural interfaces in `backend/app/providers/` for easy integration of live LLMs (OpenAI, Claude, Ollama), vector databases (Chroma, FAISS), and external data warehouses (PostgreSQL, Snowflake).
 
@@ -26,29 +30,29 @@
 ## 🚀 Quick Start Guide
 
 ### Prerequisites
-- **Python 3.10+** (Python 3.11 recommended)
-- **Node.js 18+** (Node.js 20 or 24 LTS)
-- **PowerShell** (Windows) or Bash (macOS / Linux)
+- **Python 3.11** (Root `.venv` environment)
+- **Node.js 18+** (Node.js 20 or 24 LTS recommended)
+- **PowerShell** (Windows) or **Bash** (macOS / Linux)
 
 ---
 
 ### 1. Backend Setup & Launch
 
 ```powershell
-# Navigate to the backend directory
-cd backend
+# From repository root, activate the canonical virtual environment
+.\.venv\Scripts\Activate.ps1
 
-# Create and activate Python virtual environment
-python -m venv venv
-.\venv\Scripts\Activate.ps1
+# Verify Python version (Python 3.11)
+python --version
 
-# Install Python dependencies
-pip install -r requirements.txt
+# Copy the environment template (if not already created)
+Copy-Item backend\.env.example backend\.env
 
-# Seed metadata & analytical databases (Done automatically on start, or manually:)
+# Seed development metadata & analytical databases
 python -m app.db.seed
 
-# Launch the FastAPI backend server
+# Launch the FastAPI backend server (from backend directory)
+cd backend
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
@@ -56,6 +60,10 @@ The backend server is accessible at:
 - **API Root:** `http://127.0.0.1:8000/api/v1`
 - **Interactive Swagger Docs:** `http://127.0.0.1:8000/docs`
 - **ReDoc:** `http://127.0.0.1:8000/redoc`
+- **Health Probes:**
+  - `/api/v1/health` (Liveness)
+  - `/api/v1/health/ready` (Readiness)
+  - `/api/v1/health/database` (Database connectivity)
 
 ---
 
@@ -67,8 +75,11 @@ Open a separate terminal window:
 # Navigate to frontend directory
 cd frontend
 
-# Install npm dependencies (if not already installed)
+# Install dependencies (if not already installed)
 npm install
+
+# Build check (validates TypeScript types & bundle)
+npm run build
 
 # Start Vite development server
 npm run dev
@@ -79,90 +90,103 @@ The frontend will start at:
 
 ---
 
-## 🔑 Default Credentials (Demo Mode)
+## 🔑 Default Credentials (Development / Demo Mode)
 
-The system automatically initializes a pre-configured administrator account:
+The system automatically initializes a pre-configured administrator account during development seeding:
 
 | Role | Email | Password |
 |---|---|---|
-| **Workspace Admin** | `demo@analystai.local` | `admin123456` |
+| **Workspace Admin** | `demo@analystai.local` | `AnalystAI123!` |
 
-*Note: In demo mode, the application pre-authenticates into the demo workspace if credentials are not explicitly supplied.*
+> 🔒 **Security Notice:** The hardcoded administrator fallback has been removed. All protected frontend routes strictly require authentication. Never use demo credentials or hardcoded keys in production.
 
 ---
 
 ## 🧪 Running Automated Verification Tests
 
-### Backend Unit & Integration Tests (13/13 passing)
+### Backend Test Suite (22/22 Passing)
 ```powershell
-cd backend
-.\venv\Scripts\python.exe -m pytest app/tests -v
+# From repository root
+.\.venv\Scripts\python.exe -m pytest backend/app/tests -v
 ```
 
-### Frontend TypeScript Check & Production Build
+Tests cover:
+- **Settings & Security:** Validation of production secrets, SQLite rejection in production, repr redaction.
+- **Authentication:** Bcrypt hashing, verification, legacy SHA-256 upgrade, JWT issuance and expiration.
+- **Database Architecture:** Application engine vs analytics warehouse separation, session cleanup.
+- **Health Probes:** `/health`, `/health/ready`, `/health/database`.
+- **SQL Safety & Execution:** Read-only enforcement, DDL rejection, multi-statement blocking, zero-row honest reporting, unsupported data source error handling.
+- **Knowledge & Glossary:** Full CRUD lifecycle, keyword retrieval preview.
+- **Agent Orchestrator:** End-to-end 9-step analysis pipeline, grounded evidence items.
+
+### Frontend Typecheck & Build
 ```powershell
-cd frontend
-npm run build
+# TypeScript compilation check
+& "C:\Program Files\nodejs\node.exe" "frontend/node_modules/typescript/bin/tsc" -b "frontend"
+
+# Production Vite build
+& "C:\Program Files\nodejs\node.exe" "frontend/node_modules/vite/bin/vite.js" build "frontend"
 ```
 
 ---
 
-## 📁 Repository Directory Structure
+## 🗄️ Database Architecture & Migrations
 
-```text
+### Dual-Database Separation
+1. **Application Metadata DB:** Owned and migrated exclusively by **Alembic**. Models inherit from `ApplicationBase`.
+2. **Analytics Warehouse:** Pre-seeded business fact and dimension tables. Models inherit from `AnalyticsBase`.
+
+### Managing Alembic Migrations
+```powershell
+cd backend
+
+# View current migration state
+python -m alembic current
+
+# Inspect migration history
+python -m alembic history
+
+# Generate a new migration for schema changes
+python -m alembic revision --autogenerate -m "describe_changes"
+
+# Apply pending migrations
+python -m alembic upgrade head
+```
+
+---
+
+## 📁 Repository Structure
+
+```
 AI Analyst/
 ├── backend/
 │   ├── app/
-│   │   ├── api/v1/          # 19 modular FastAPI route endpoints
-│   │   ├── core/            # Config, security, logging, exceptions
-│   │   ├── db/              # SQLAlchemy sessions, metadata, seed scripts
-│   │   ├── models/          # 18 relational models (metadata & demo analytics)
-│   │   ├── providers/       # LLM, Embedding, VectorStore & DB Connector interfaces
-│   │   ├── schemas/         # Pydantic v2 schemas for all payloads
-│   │   ├── services/        # 16 domain services (agent orchestration, SQL safety, etc.)
-│   │   └── tests/           # 13 comprehensive pytest test suites
-│   ├── analystai.db         # SQLite metadata database
-│   ├── analystai_analytics.db # SQLite seeded sales warehouse
-│   └── requirements.txt     # Python requirements
+│   │   ├── api/v1/         # Modular FastAPI API routers
+│   │   ├── core/           # Config, security (bcrypt/JWT), logging, exceptions
+│   │   ├── db/             # Base, engines, session factories, seed script
+│   │   ├── models/         # SQLAlchemy ORM models (ApplicationBase vs AnalyticsBase)
+│   │   ├── providers/      # Database connectors, mock LLM/embedding providers
+│   │   ├── schemas/        # Pydantic v2 validation models
+│   │   ├── services/       # Business logic, orchestration, validation, analysis
+│   │   └── tests/          # Pytest test suite (22 tests)
+│   ├── data/               # SQLite database files and uploads
+│   ├── migrations/         # Alembic migration environment and versions
+│   ├── alembic.ini         # Alembic configuration
+│   ├── requirements.txt    # Canonical backend dependencies
+│   └── pyproject.toml      # Backend package & pytest configuration
 ├── frontend/
 │   ├── src/
-│   │   ├── api/             # HTTP client and TypeScript interfaces
-│   │   ├── app/             # Router and React Context providers (Auth, Workspace, Toast)
-│   │   ├── components/      # UI primitives (Cards, Buttons, Dialogs, Charts) & Layout
-│   │   ├── features/        # 16 complete feature screens (Analyst, SQL, Explorer, etc.)
-│   │   ├── lib/             # Formatters, color utilities, Tailwind helpers
-│   │   └── styles/          # Design tokens and Tailwind CSS
-│   ├── package.json
-│   └── vite.config.ts
-└── docs/                    # Complete architectural and FYP documentation suite
-    ├── PRODUCT_OVERVIEW.md
-    ├── ARCHITECTURE.md
-    ├── API_REFERENCE.md
-    ├── DATA_MODEL.md
-    ├── DEVELOPMENT_GUIDE.md
-    ├── AI_INTEGRATION_ROADMAP.md
-    ├── TEST_PLAN.md
-    ├── SECURITY_NOTES.md
-    ├── DECISIONS.md
-    └── IMPLEMENTATION_STATUS.md
+│   │   ├── api/            # HTTP client, TypeScript interfaces
+│   │   ├── app/            # Router, AuthProvider, ToastProvider
+│   │   ├── components/     # UI design system, AppShell, ChartCard
+│   │   └── features/       # Feature pages (Analyst, SQL, Explorer, Dashboards)
+│   ├── package.json        # Frontend scripts and dependencies
+│   └── vite.config.ts      # Vite configuration
+├── docs/                   # Architectural and developer documentation
+└── README.md               # Project guide and overview
 ```
 
 ---
 
-## 🎓 Final Year Project (FYP) Student Extensions
-
-All integration boundaries for live AI / NLP models and external databases are clearly marked with `# TODO(STUDENT)` comments:
-
-1. **Live LLM Integration:** `backend/app/providers/llm_provider.py`
-   - Implement `OpenAILLMProvider`, `AnthropicLLMProvider`, or `OllamaLLMProvider`.
-2. **Dense Semantic Embeddings:** `backend/app/providers/embedding_provider.py`
-   - Implement `OpenAIEmbeddingProvider` or `HuggingFaceEmbeddingProvider` (`all-MiniLM-L6-v2`, `bge-small-en`).
-3. **Vector Store / Vector Database:** `backend/app/providers/vector_store.py`
-   - Replace in-memory cosine store with `ChromaDBVectorStore` or `FAISSVectorStore`.
-4. **External Warehouse Drivers:** `backend/app/providers/database_connector.py`
-   - Implement `PostgresConnector` with psycopg2/SQLAlchemy, or `SnowflakeConnector`.
-
----
-
-## 🛡️ License
-Educational & Final Year Project (FYP) demonstration codebase.
+## 🛡️ License & Academic Context
+Developed as an academic Final Year Project (FYP) focused on Natural Language Processing and Agentic Business Intelligence. All simulated interfaces are clearly documented with `# TODO(STUDENT)` for research extensions.

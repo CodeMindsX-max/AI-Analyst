@@ -1,10 +1,10 @@
 from datetime import date
 from sqlalchemy import String, Integer, Float, Date
 from sqlalchemy.orm import Mapped, mapped_column
-from app.db.base import Base
+from app.db.base import AnalyticsBase
 
 
-class SalesOrder(Base):
+class SalesOrder(AnalyticsBase):
     """Business table: sales_orders (Analytics Demo Dataset)."""
     __tablename__ = "sales_orders"
 
@@ -27,7 +27,7 @@ class SalesOrder(Base):
     channel: Mapped[str] = mapped_column(String(50), default="Direct", nullable=False)
 
 
-class Customer(Base):
+class Customer(AnalyticsBase):
     """Business table: customers (Analytics Demo Dataset)."""
     __tablename__ = "customers"
 
@@ -42,7 +42,7 @@ class Customer(Base):
     signup_date: Mapped[date] = mapped_column(Date, nullable=False)
 
 
-class Product(Base):
+class Product(AnalyticsBase):
     """Business table: products (Analytics Demo Dataset)."""
     __tablename__ = "products"
 
@@ -55,7 +55,7 @@ class Product(Base):
     is_active: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
 
-class Region(Base):
+class Region(AnalyticsBase):
     """Business table: regions (Analytics Demo Dataset)."""
     __tablename__ = "regions"
 

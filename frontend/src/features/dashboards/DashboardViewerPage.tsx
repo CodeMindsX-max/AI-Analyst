@@ -172,7 +172,7 @@ export function DashboardViewerPage() {
                         innerRadius={45}
                         paddingAngle={4}
                       >
-                        {data.map((_, i) => (
+                        {data.map((_: any, i: number) => (
                           <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                         ))}
                       </Pie>

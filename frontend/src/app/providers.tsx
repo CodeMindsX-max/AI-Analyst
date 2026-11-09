@@ -82,21 +82,23 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  // Initial auth load
+  // Initial auth load: verify actual token against backend /auth/me
   useEffect(() => {
     async function checkAuth() {
+      const token = localStorage.getItem('analystai_token');
+      if (!token) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
       try {
         const currentUser = await api.auth.getMe();
         setUser(currentUser);
-      } catch {
-        // Fallback default demo user in demo mode
-        setUser({
-          id: 'user-demo-admin',
-          email: 'demo@analystai.local',
-          full_name: 'Alex Mercer (Demo Lead)',
-          role: 'Admin',
-          is_active: true,
-        });
+      } catch (err: any) {
+        // Token is invalid, expired, or backend rejected it. Clear invalid session.
+        localStorage.removeItem('analystai_token');
+        setUser(null);
       } finally {
         setLoading(false);
       }

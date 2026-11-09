@@ -32,7 +32,12 @@ def validate_sql(data: SqlValidateRequest):
 @router.post("/execute", response_model=SqlExecuteResponse)
 def execute_sql(data: SqlExecuteRequest, db: Session = Depends(get_db)):
     """Safely execute read-only SQL query against the demo analytics database."""
-    res = sql_execution_service.execute(data.query_sql, limit=data.limit or 100)
+    res = sql_execution_service.execute(
+        data.query_sql,
+        limit=data.limit or 100,
+        source_id=data.source_id,
+        db=db,
+    )
 
     # Persist in query history
     qh = QueryHistory(

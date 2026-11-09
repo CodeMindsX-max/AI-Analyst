@@ -45,3 +45,31 @@ def test_sql_execute_runs_read_only(client):
     assert data["status"] == "success"
     assert len(data["rows"]) > 0
     assert "region_name" in data["columns"]
+
+
+def test_sql_execute_zero_rows_honest_reporting(client):
+    """Verify empty query result returns 0 rows without injecting fake fallback data."""
+    response = client.post(
+        "/api/v1/sql/execute",
+        json={"query_sql": "SELECT * FROM sales_orders WHERE order_id = 'non-existent-order-id-99999';"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["row_count"] == 0
+    assert data["rows"] == []
+
+
+def test_sql_execute_unsupported_data_source_fails_honestly(client):
+    """Verify executing against scaffolded or non-existent remote source fails honestly."""
+    response = client.post(
+        "/api/v1/sql/execute",
+        json={
+            "query_sql": "SELECT 1;",
+            "source_id": "src-pg-1",
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "error"
+    assert "scaffolded connector" in data["error_message"].lower() or "not implemented" in data["error_message"].lower()
