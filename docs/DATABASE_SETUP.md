@@ -181,9 +181,10 @@ python -m alembic upgrade head
 Development seeds populate realistic mock users, glossary items, and analytics records.
 
 ### 7.1 Running the Seed Script
-Execute the seed script from the repository root:
+Execute the seed script from the backend directory:
 ```powershell
-.\.venv\Scripts\python.exe -m backend.app.db.seed
+cd backend
+..\.venv\Scripts\python.exe -m app.db.seed
 ```
 
 This creates:

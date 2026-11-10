@@ -101,7 +101,7 @@ Open a PowerShell terminal in the repository root:
 
 powershell
 cd backend
-.\venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 Backend API URL: http://127.0.0.1:8000/api/v1
 Swagger Documentation: http://127.0.0.1:8000/docs
 Step 2: Start Frontend (React + Vite)

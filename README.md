@@ -48,11 +48,13 @@ python --version
 # Copy the environment template (if not already created)
 Copy-Item backend\.env.example backend\.env
 
+# Navigate to the backend directory before running backend modules
+cd backend
+
 # Seed development metadata & analytical databases
 python -m app.db.seed
 
-# Launch the FastAPI backend server (from backend directory)
-cd backend
+# Launch the FastAPI backend server
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
